@@ -94,7 +94,11 @@ async def patch_item(item: ItemPatch, item_id: int):
     async with AsyncSession(engine) as session:
         try:
             patched_item = await session.get(Item, item_id)
-            patched_item = Item.from_pd(item, patched_item)
+
+            if not patched_item:
+                raise HTTPException(status_code=404, detail=f"{item_id} is not found")
+
+            patched_item.update_from_pd(item)
             session.add(patched_item)
         except IntegrityError:
             await session.rollback()

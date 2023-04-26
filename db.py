@@ -14,10 +14,17 @@ class Base(DeclarativeBase):
     def __tablename__(cls):
         return cls.__name__.lower()
 
+    def update_from_pd(self, source: BaseModel, exclude_unset=True, **kwargs):
+        source_dict = source.dict(**kwargs, exclude_unset=exclude_unset)
+        for field, value in source_dict.items():
+            if hasattr(self, field):
+                setattr(self, field, value)
+
+        return self
+
     @classmethod
-    def from_pd(cls, src: BaseModel, target: Optional[Self] = None, exclude_unset=True, **kwargs) -> Self:
-        if not target:
-            target = cls()
+    def from_pd(cls, src: BaseModel, exclude_unset=True, **kwargs) -> Self:
+        target = cls()
 
         source_dict = src.dict(**kwargs, exclude_unset=exclude_unset)
         for field, value in source_dict.items():
