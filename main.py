@@ -12,9 +12,10 @@ from starlette.responses import StreamingResponse
 
 from db import Item, User, engine
 from logs import RouterLoggingMiddleware
-from schemas import ItemDB, ItemPost, UserDB, UserPost
+from schemas import ItemDB, ItemPost, UserDB, UserPost, ItemPatch
 
 app = FastAPI()
+
 
 # app.add_middleware(
 #     RouterLoggingMiddleware,
@@ -73,18 +74,35 @@ async def post_item(item: ItemPost):
     async with AsyncSession(engine) as session:
         try:
             user = await session.get(User, item.user_id)
-            new_item = Item(**item.dict(), user=user)
+            new_item = Item.from_pd(item)
+            new_item.user = user
             session.add(new_item)
             await session.flush()
 
         except IntegrityError:
             await session.rollback()
-            raise HTTPException(status_code=400, detail="Item is not added")
+            raise HTTPException(status_code=400, detail=f"{item} is not added")
 
         await session.commit()
         await session.refresh(new_item)
 
     return new_item
+
+
+@app.patch("/item/{item_id}", response_model=ItemDB)
+async def patch_item(item: ItemPatch, item_id: int):
+    async with AsyncSession(engine) as session:
+        try:
+            patched_item = await session.get(Item, item_id)
+            patched_item = Item.from_pd(item, patched_item)
+            session.add(patched_item)
+        except IntegrityError:
+            await session.rollback()
+            raise HTTPException(status_code=400, detail=f"{patched_item} is not updated")
+
+        await session.commit()
+        await session.refresh(patched_item)
+    return patched_item
 
 if __name__ == '__main__':
     uvicorn.run(app)

@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Self, Type
 
 from pydantic import BaseModel
 from sqlalchemy import String, ForeignKey, URL
@@ -15,13 +15,16 @@ class Base(DeclarativeBase):
         return cls.__name__.lower()
 
     @classmethod
-    def from_pd(cls, src: BaseModel, **kwargs):
-        data = {}
-        source_dict = src.dict(**kwargs)
+    def from_pd(cls, src: BaseModel, target: Optional[Self] = None, exclude_unset=True, **kwargs) -> Self:
+        if not target:
+            target = cls()
+
+        source_dict = src.dict(**kwargs, exclude_unset=exclude_unset)
         for field, value in source_dict.items():
             if hasattr(cls, field):
-                data[field] = value
-        return cls(**data)
+                setattr(target, field, value)
+
+        return target
 
 
 class User(Base):

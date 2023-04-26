@@ -23,6 +23,13 @@ class ItemPost(BaseModel):
     user_id: int
 
 
+class ItemPatch(BaseModel):
+    title: Optional[str]
+    weight: Optional[float]
+    released: Optional[datetime]
+    user_id: Optional[int]
+
+
 class ItemDB(ItemPost):
     class Config:
         orm_mode = True
