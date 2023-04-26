@@ -70,7 +70,7 @@ engine = create_async_engine(
 )
 
 
-async def create_database():
+async def create_database():  # pragma: no cover
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -82,7 +82,7 @@ async def create_database():
                 )
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     """
     docker rm -f items-pg 
     

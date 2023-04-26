@@ -28,13 +28,13 @@ async def home():
     return {"message": "ok", "code": 0}
 
 
-async def gen_response(request, count: int = 10000):
+async def gen_response(request, count: int = 5):
     try:
         print(f"client, connected {request.client}. start streaming")
         for c in range(count):
             await asyncio.sleep(0.1)
             yield b"some chunk"
-    except asyncio.CancelledError:
+    except asyncio.CancelledError:  # pragma: no cover
         print(f"client, disconnected {request.client}")
 
 
@@ -49,8 +49,8 @@ async def users_stream() -> AsyncIterator[bytes]:
             result = await session.stream_scalars(select(User).order_by(User.id))
             async for user in result:
                 await asyncio.sleep(0.1)
-                yield UserDB.from_orm(user).json()
-    except asyncio.CancelledError:
+                yield UserDB.from_orm(user).json() + "\n"
+    except asyncio.CancelledError:  # pragma: no cover
         pass
 
 
@@ -61,12 +61,15 @@ async def get_users():
 
 @app.post("/user", response_model=UserDB)
 async def post_item(user: UserPost):
-    async with AsyncSession(engine) as session:
-        new_user = User.from_pd(user)
-        session.add(new_user)
-        await session.commit()
-        await session.refresh(new_user)
-    return new_user
+    try:
+        async with AsyncSession(engine) as session:
+            new_user = User.from_pd(user)
+            session.add(new_user)
+            await session.commit()
+            await session.refresh(new_user)
+        return new_user
+    except IntegrityError as exc:
+        raise HTTPException(status_code=400, detail=f"Can't create user [{user}] with exception: {exc}")
 
 
 @app.post("/item", response_model=ItemDB)
@@ -81,7 +84,7 @@ async def post_item(item: ItemPost):
 
         except IntegrityError:
             await session.rollback()
-            raise HTTPException(status_code=400, detail=f"{item} is not added")
+            raise HTTPException(status_code=400, detail=f"Data [{item}] is not added")
 
         await session.commit()
         await session.refresh(new_item)
@@ -96,17 +99,18 @@ async def patch_item(item: ItemPatch, item_id: int):
             patched_item = await session.get(Item, item_id)
 
             if not patched_item:
-                raise HTTPException(status_code=404, detail=f"{item_id} is not found")
+                raise HTTPException(status_code=404, detail=f"Item with id={item_id} is not found")
 
             patched_item.update_from_pd(item)
             session.add(patched_item)
+            await session.flush()
         except IntegrityError:
             await session.rollback()
-            raise HTTPException(status_code=400, detail=f"{patched_item} is not updated")
+            raise HTTPException(status_code=400, detail=f"Item with id={item_id} is not updated with data [{item}]")
 
         await session.commit()
         await session.refresh(patched_item)
     return patched_item
 
-if __name__ == '__main__':
+if __name__ == '__main__': # pragma: no cover
     uvicorn.run(app)

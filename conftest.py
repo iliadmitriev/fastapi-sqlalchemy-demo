@@ -11,9 +11,7 @@ from docker.errors import DockerException
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy import URL
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
-
-from db import Base
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 
 
 def try_external_conn_data():
@@ -77,7 +75,7 @@ def try_docker_container():
 
 
 @pytest.fixture(scope="session")
-def pg_connection_data():
+async def pg_connection_data():
     conn = try_external_conn_data()
     if conn:
         yield conn
@@ -89,28 +87,48 @@ def pg_connection_data():
 
 @pytest.fixture(scope="session")
 async def db_test_engine(pg_connection_data) -> AsyncEngine:
-    conn_obj = URL.create(
-        drivername="postgresql+asyncpg",
-        **pg_connection_data
-    )
-    engine = create_async_engine(
-        conn_obj
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+    with mock.patch("sqlalchemy.ext.asyncio.create_async_engine") as patched_engine:
+        conn_obj = URL.create(
+            drivername="postgresql+asyncpg",
+            **pg_connection_data
+        )
+        engine = create_async_engine(
+            conn_obj
+        )
+        patched_engine.return_value = engine
+
+        from db import Base
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        yield engine
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
 
 
 @pytest.fixture(scope="session")
 async def get_app(db_test_engine: AsyncEngine) -> FastAPI:
-    with mock.patch("sqlalchemy.ext.asyncio.create_async_engine") as patched_engine:
-        patched_engine.return_value = db_test_engine
-        from main import app
-        async with LifespanManager(app):
-            yield app
+    from main import app
+    async with LifespanManager(app):
+        yield app
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def add_some_users(db_test_engine: AsyncEngine):
+    from db import User
+    users = [
+            User(login="user1", name="Name1"),
+            User(login="user2", name="Name2"),
+            User(login="user3", name="Name3"),
+        ]
+    async with AsyncSession(db_test_engine) as session:
+        session.add_all(users)
+        await session.commit()
+        for user in users:
+            await session.refresh(user)
+
+    yield users
 
 
 @pytest.fixture(scope="session")

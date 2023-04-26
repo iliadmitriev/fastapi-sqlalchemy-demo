@@ -1,2 +1,19 @@
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+
+[tool.coverage.run]
+source = ["."]
+branch = true
+parallel = true
+concurrency = ["greenlet"]
+omit = [
+	"venv/*",
+	"conftest.py",
+	"logs.py",
+	"test_*.py",
+]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
