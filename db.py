@@ -25,12 +25,7 @@ class Base(DeclarativeBase):
     @classmethod
     def from_pd(cls, src: BaseModel, exclude_unset=True, **kwargs) -> Self:
         target = cls()
-
-        source_dict = src.dict(**kwargs, exclude_unset=exclude_unset)
-        for field, value in source_dict.items():
-            if hasattr(cls, field):
-                setattr(target, field, value)
-
+        target.update_from_pd(src, exclude_unset=exclude_unset, **kwargs)
         return target
 
 
